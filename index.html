@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parabolic Flight 0G Simulation</title>
+<style>
+    :root {
+        --bg: #0d1117;
+        --panel: #161b22;
+        --panel-2: #1c232d;
+        --border: #2a3340;
+        --text: #e6edf3;
+        --muted: #8b98a8;
+        --level: #38bdf8;
+        --pull: #fb923c;
+        --zerog: #c084fc;
+        --lift: #4ade80;
+        --weight: #f87171;
+        --thrust: #facc15;
+        --drag: #2dd4bf;
+        --net: #f0abfc;
+        --accent: #3b82f6;
+    }
+    * { box-sizing: border-box; }
+    body {
+        margin: 0; background: var(--bg); color: var(--text);
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        font-size: 14px;
+    }
+    html, body { height: 100%; }
+    .wrap {
+        height: 100vh; max-width: 1600px; margin: 0 auto; padding: 12px 16px;
+        display: flex; flex-direction: column; gap: 10px;
+    }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: none; }
+    h1 { font-size: 18px; margin: 0; font-weight: 650; letter-spacing: .2px; }
+    .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .pill {
+        display: inline-flex; align-items: center; gap: 8px; padding: 6px 13px; border-radius: 999px;
+        background: var(--panel); border: 1px solid var(--border); font-weight: 600; white-space: nowrap;
+    }
+    .head-right { display: flex; align-items: center; gap: 8px; }
+    .pill .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .grid {
+        flex: 1; min-height: 0; display: grid; gap: 10px;
+        grid-template-columns: minmax(0, 1fr) clamp(300px, 27vw, 400px);
+        grid-template-rows: minmax(0, 1fr) auto auto;
+    }
+    .grid > .main-card { grid-column: 1; grid-row: 1; }
+    .grid > .side { grid-column: 2; grid-row: 1 / 4; }
+    .grid > .stats { grid-column: 1; grid-row: 2; }
+    .grid > .bottom { grid-column: 1; grid-row: 3; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+    .card h2 {
+        font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
+        margin: 0; padding: 8px 12px 0; font-weight: 600; flex: none;
+    }
+    /* płótna wypełniają dostępne miejsce w karcie */
+    .cv { position: relative; flex: 1; min-height: 0; }
+    .cv canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .cv.chart { flex: none; height: clamp(90px, 17vh, 160px); }
+    #chartCanvas { cursor: ew-resize; touch-action: none; }
+    .side { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+    .side .fbd { flex: 2; }
+    .side .cab { flex: 1; }
+
+    .bars { padding: 2px 12px 8px; display: grid; grid-template-columns: 84px 1fr 62px; gap: 3px 8px; align-items: center; font-size: 11.5px; flex: none; }
+    .bars .lbl { color: var(--muted); white-space: nowrap; }
+    .bars .lbl b { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+    .bars .track { height: 8px; background: var(--panel-2); border-radius: 5px; overflow: hidden; }
+    .bars .fill { height: 100%; border-radius: 5px; transition: none; }
+    .bars .val { text-align: right; font-variant-numeric: tabular-nums; }
+
+    .stats { flex: none; display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px; background: var(--border); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+    .stat { background: var(--panel); padding: 5px 12px; }
+    .stat .k { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+    .stat .v { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .stat .v small { font-size: 11px; color: var(--muted); font-weight: 500; margin-left: 2px; }
+
+    .bottom { flex: none; }
+    .controls { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--border); }
+    button, select {
+        background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 7px;
+        padding: 6px 11px; font: inherit; cursor: pointer;
+    }
+    button:hover, select:hover { border-color: #3d4a5c; }
+    button.primary { background: var(--accent); border-color: var(--accent); font-weight: 600; width: 112px; white-space: nowrap; }
+    button.primary:hover { background: #2563eb; }
+    .time { font-variant-numeric: tabular-nums; min-width: 104px; text-align: center; color: var(--muted); }
+    .time b { color: var(--text); font-weight: 600; }
+    input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); height: 22px; }
+    .jumps { display: flex; gap: 6px; }
+    .jumps button { padding: 5px 9px; font-size: 12px; }
+    .explain { padding: 6px 12px 9px; color: #c9d4e0; line-height: 1.45; font-size: 12.5px; flex: none; display: grid; }
+    /* wszystkie opisy w tej samej komórce: wysokość = najdłuższy opis, więc układ nie skacze */
+    .explain p { grid-area: 1 / 1; margin: 0; visibility: hidden; }
+    .explain p.on { visibility: visible; }
+    .explain strong { color: var(--text); }
+
+    @media (max-width: 1100px) {
+        .jumps { display: none; }
+        .sub { display: none; }
+    }
+    /* małe ekrany: układ pionowy z przewijaniem */
+    @media (max-width: 760px), (max-height: 540px) {
+        .wrap { height: auto; }
+        .grid { grid-template-columns: 1fr; grid-template-rows: none; }
+        .grid > * { grid-column: auto !important; grid-row: auto !important; }
+        .cv.main { flex: none; height: 300px; }
+        .cv.fbd-cv { flex: none; height: 260px; }
+        .cv.cab-cv { flex: none; height: 200px; }
+        .stats { grid-template-columns: repeat(3, 1fr); }
+        .controls { flex-wrap: wrap; }
+    }
+</style>
+</head>
+<body>
+<div class="wrap">
+    <header>
+        <div>
+            <h1 data-i18n="title"></h1>
+            <div class="sub" data-i18n="subtitle"></div>
+        </div>
+        <div class="head-right">
+            <div class="pill"><span class="dot" id="phaseDot"></span><span id="phaseName">—</span></div>
+            <select id="langSel" data-i18n-title="langTitle"></select>
+        </div>
+    </header>
+
+    <div class="grid">
+        <div class="card main-card">
+            <h2 data-i18n="cardTrajectory"></h2>
+            <div class="cv main"><canvas id="mainCanvas"></canvas></div>
+            <div class="explain" id="explain"></div>
+        </div>
+        <div class="side">
+            <div class="card fbd">
+                <h2 data-i18n="cardForces"></h2>
+                <div class="cv fbd-cv"><canvas id="fbdCanvas"></canvas></div>
+                <div class="bars" id="bars"></div>
+            </div>
+            <div class="card cab">
+                <h2 data-i18n="cardCabin"></h2>
+                <div class="cv cab-cv"><canvas id="cabinCanvas"></canvas></div>
+            </div>
+        </div>
+        <div class="stats" id="stats"></div>
+
+        <div class="card bottom">
+            <h2 data-i18n="cardChart"></h2>
+            <div class="cv chart"><canvas id="chartCanvas"></canvas></div>
+            <div class="controls">
+                <button class="primary" id="playBtn"></button>
+                <button id="resetBtn" data-i18n-title="resetTitle">⟲</button>
+                <input type="range" id="timeSlider" min="0" max="1" step="0.01" value="0">
+                <span class="time" id="timeLabel"><b>0.0 s</b> / 0.0 s</span>
+                <select id="speedSel" data-i18n-title="speedTitle">
+                    <option value="0.25">0.25×</option>
+                    <option value="0.5">0.5×</option>
+                    <option value="1">1×</option>
+                    <option value="2" selected>2×</option>
+                    <option value="4">4×</option>
+                    <option value="8">8×</option>
+                </select>
+                <div class="jumps" id="jumps"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Parametry modelu
+// ---------------------------------------------------------------------------
+const G = 9.81;              // m/s^2
+const MASS = 140000;         // kg (klasa A310 Zero-G)
+const MG = MASS * G / 1000;  // ciężar w kN
+const V0 = 200;              // prędkość przelotowa, m/s
+const H0 = 6000;             // wysokość początkowa, m
+const L_OVER_D = 16;         // doskonałość aerodynamiczna (opór przy V0 = mg/16)
+const N_PULL = 1.8;          // przeciążenie przy wyrwaniu i wyprowadzeniu
+const GAMMA_IN = 45;         // kąt toru przy wejściu w parabolę, deg
+const GAMMA_OUT = 42;        // kąt toru przy wyjściu z paraboli, deg
+const T_LEVEL_1 = 8;         // czas lotu poziomego przed manewrem, s
+const T_LEVEL_2 = 12;        // czas lotu poziomego po manewrze, s
+const CABIN = { w: 6.0, h: 2.3 };   // fragment kabiny, m
+
+// kolory faz lotu (nazwy i opisy są w tłumaczeniach: I18N.*.phases / I18N.*.explain)
+const PHASES = [
+    { color: '#38bdf8' },
+    { color: '#fb923c' },
+    { color: '#c084fc' },
+    { color: '#fb923c' },
+    { color: '#38bdf8' },
+];
+
+// ---------------------------------------------------------------------------
+// Tłumaczenia. Aby dodać język, dopisz kolejny obiekt z tymi samymi kluczami
+// (np. de: { name: 'Deutsch', locale: 'de-DE', ... }) — pojawi się w przełączniku.
+// Brakujące klucze są brane z języka zapasowego (FALLBACK_LANG). {x} = wstawiana wartość.
+// ---------------------------------------------------------------------------
+const I18N = {
+    pl: {
+        name: 'Polski',
+        locale: 'pl-PL',
+        docTitle: 'Symulacja Lotu Parabolicznego 0G',
+        title: 'Lot paraboliczny — symulacja nieważkości (0 G)',
+        subtitle: 'Model punktu materialnego: samolot ~140 t, siła nośna prostopadła do toru lotu, ciąg i opór wzdłuż toru.',
+        cardTrajectory: 'Trajektoria',
+        cardForces: 'Rozkład sił na samolocie',
+        cardCabin: 'Kabina — co czują pasażerowie',
+        cardChart: 'Przeciążenie i wysokość w czasie',
+        langTitle: 'Język',
+        resetTitle: 'Na początek',
+        speedTitle: 'Prędkość odtwarzania',
+        play: '▶ Start', pause: '❚❚ Pauza', resume: '▶ Wznów', restart: '▶ Od nowa',
+        jumps: ['Wyrwanie', '0 G', 'Wyprowadzenie'],
+        phases: [
+            'Lot poziomy (1 G)',
+            'Wyrwanie / pull-up (1,8 G)',
+            'Nieważkość (0 G)',
+            'Wyprowadzenie / pull-out (1,8 G)',
+            'Lot poziomy (1 G)',
+        ],
+        explain: [
+            '<strong>Lot poziomy.</strong> Siła nośna równoważy ciężar (L = mg), a ciąg równoważy opór (T = D). Wypadkowa jest zerowa, pasażerowie czują normalne 1 G — podłoga pcha ich w górę siłą równą ich ciężarowi.',
+            '<strong>Wyrwanie.</strong> Pilot ściąga ster: siła nośna rośnie do 1,8 × mg i zakrzywia tor lotu w górę. Nadwyżka siły nośnej nad składową ciężaru prostopadłą do toru (L − mg·cos γ) to siła dośrodkowa. Pasażerowie są wciskani w fotele z siłą 1,8 razy większą niż zwykle.',
+            '<strong>Nieważkość.</strong> Pilot ustawia siłę nośną na zero, a ciąg dokładnie kompensuje opór (T = D). Jedyną niezrównoważoną siłą jest grawitacja — samolot porusza się po paraboli rzutu ukośnego, jak rzucony kamień. Pasażerowie spadają razem z nim, więc nic ich nie dociska do podłogi.',
+            '<strong>Wyprowadzenie.</strong> Samolot nurkuje pod kątem ~42°. Pilot znów zwiększa siłę nośną do 1,8 × mg, by wyrównać lot. Pasażerowie opadają na podłogę i czują podwyższone przeciążenie.',
+            '<strong>Lot poziomy.</strong> Powrót do równowagi sił. W rzeczywistych lotach (np. Novespace A310 Zero-G) manewr powtarza się ok. 30 razy podczas jednego lotu.',
+        ],
+        distanceScale: 'odległość: {d} km · skala pionowa ×{e}',
+        tdScale: 'strzałki T i D ×{k}',
+        barL: 'Siła nośna', barW: 'Ciężar mg', barT: 'Ciąg', barD: 'Opór', barF: 'Wypadkowa',
+        cabinFront: 'przód →',
+        floorForce: 'nacisk podłogi N = {n} mg',
+        floating: 'pasażer unosi się — N = 0',
+        chartN: 'przeciążenie n',
+        chartH: 'wysokość',
+        statT: 'Czas', statH: 'Wysokość', statV: 'Prędkość', statG: 'Kąt toru', statN: 'Przeciążenie', statVz: 'Prędkość pionowa',
+    },
+    en: {
+        name: 'English',
+        locale: 'en-GB',
+        docTitle: 'Parabolic Flight 0G Simulation',
+        title: 'Parabolic flight — weightlessness (0 G) simulation',
+        subtitle: 'Point-mass model: ~140 t aircraft, lift perpendicular to the flight path, thrust and drag along it.',
+        cardTrajectory: 'Trajectory',
+        cardForces: 'Forces on the aircraft',
+        cardCabin: 'Cabin — what passengers feel',
+        cardChart: 'Load factor and altitude over time',
+        langTitle: 'Language',
+        resetTitle: 'Back to start',
+        speedTitle: 'Playback speed',
+        play: '▶ Start', pause: '❚❚ Pause', resume: '▶ Resume', restart: '▶ Restart',
+        jumps: ['Pull-up', '0 G', 'Pull-out'],
+        phases: [
+            'Level flight (1 G)',
+            'Pull-up (1.8 G)',
+            'Weightlessness (0 G)',
+            'Pull-out (1.8 G)',
+            'Level flight (1 G)',
+        ],
+        explain: [
+            '<strong>Level flight.</strong> Lift balances weight (L = mg) and thrust balances drag (T = D). The net force is zero and passengers feel a normal 1 G — the floor pushes them up with a force equal to their weight.',
+            '<strong>Pull-up.</strong> The pilot pulls back: lift rises to 1.8 × mg and bends the flight path upward. The excess of lift over the weight component perpendicular to the path (L − mg·cos γ) is the centripetal force. Passengers are pressed into their seats 1.8 times harder than usual.',
+            '<strong>Weightlessness.</strong> The pilot sets lift to zero while thrust exactly cancels drag (T = D). Gravity is the only unbalanced force — the aircraft follows a ballistic parabola, like a thrown stone. Passengers fall together with it, so nothing presses them against the floor.',
+            '<strong>Pull-out.</strong> The aircraft dives at ~42°. The pilot raises lift to 1.8 × mg again to level off. Passengers drop back to the floor and feel increased load.',
+            '<strong>Level flight.</strong> Forces are balanced again. On real flights (e.g. the Novespace A310 Zero-G) the manoeuvre is repeated about 30 times per flight.',
+        ],
+        distanceScale: 'distance: {d} km · vertical scale ×{e}',
+        tdScale: 'T and D arrows ×{k}',
+        barL: 'Lift', barW: 'Weight mg', barT: 'Thrust', barD: 'Drag', barF: 'Net force',
+        cabinFront: 'front →',
+        floorForce: 'floor force N = {n} mg',
+        floating: 'passenger floats — N = 0',
+        chartN: 'load factor n',
+        chartH: 'altitude',
+        statT: 'Time', statH: 'Altitude', statV: 'Speed', statG: 'Path angle', statN: 'Load factor', statVz: 'Vertical speed',
+    },
+};
+const FALLBACK_LANG = 'en';
+
+let lang = (() => {
+    try { const saved = localStorage.getItem('lang'); if (I18N[saved]) return saved; } catch (e) {}
+    const nav = (navigator.language || '').slice(0, 2);
+    return I18N[nav] ? nav : FALLBACK_LANG;
+})();
+
+function t(key, vars) {
+    let s = I18N[lang][key] ?? I18N[FALLBACK_LANG][key] ?? key;
+    if (vars && typeof s === 'string') s = s.replace(/\{(\w+)\}/g, (m, k) => vars[k] ?? m);
+    return s;
+}
+
+// liczba sformatowana wg języka (przecinek / kropka dziesiętna)
+function fmt(v, digits = 0) {
+    return v.toLocaleString(t('locale'), { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+// ---------------------------------------------------------------------------
+// Symulacja (liczona z góry, by suwak czasu mógł swobodnie przewijać)
+// ---------------------------------------------------------------------------
+function simulate() {
+    const dt = 0.005, every = 4;
+    const S = [];
+    const phaseStart = [0];
+    let x = 0, h = H0, V = V0, gam = 0, n = 1, phase = 0, t = 0, tLevel2 = 0;
+
+    // obiekty w kabinie (układ samolotu: x do przodu, y w górę od podłogi)
+    const P = { x: 2.0, y: 0.87, vx: 0, vy: 0, r: 0.87, rot: 0, w: 0, e: 0.15, mu: 0.8, roll: 1, onFloor: true };  // pasażer (środek ciała)
+    const B = { x: 4.4, y: 0.14, vx: 0, vy: 0, r: 0.14, rot: 0, w: 0, e: 0.55, mu: 0.01, roll: 0.6, onFloor: true }; // piłka: toczy się (opór toczenia ~0,01, pusta kula: a = 0,6·a)
+    const objs = [P, B];
+
+    for (let i = 0; ; i++) {
+        const Dm = G / L_OVER_D * (V / V0) ** 2;   // opór / masa
+        let nT, ftT;                                // zadane: przeciążenie normalne, (T-D)/m
+        const prevPhase = phase;
+
+        if (phase === 0) {
+            nT = 1; ftT = 0;
+            if (t >= T_LEVEL_1) phase = 1;
+        } else if (phase === 1) {
+            nT = N_PULL; ftT = 0.12 * G;            // pełny ciąg
+            if (gam >= GAMMA_IN * Math.PI / 180) phase = 2;
+        } else if (phase === 2) {
+            // pilot utrzymuje ~0 G; drobne błędy sterowania sprawiają, że przedmioty dryfują
+            nT = -0.012 + 0.02 * Math.sin(0.9 * t);
+            ftT = 0.008 * G * Math.sin(0.6 * t + 1);
+            if (gam <= -GAMMA_OUT * Math.PI / 180) phase = 3;
+        } else if (phase === 3) {
+            nT = N_PULL; ftT = -0.05 * G;           // ciąg zredukowany
+            if (gam >= 0) { phase = 4; tLevel2 = t; }
+        } else {
+            nT = Math.cos(gam) + V * (-0.3 * gam) / G;
+            nT = Math.max(0.5, Math.min(N_PULL, nT));
+            ftT = Math.max(-0.05 * G, Math.min(0.12 * G, 0.5 * (V0 - V) / V0 * G));
+            if (t > tLevel2 + T_LEVEL_2) break;
+        }
+        if (phase !== prevPhase) phaseStart.push(t);
+
+        // pilot zmienia przeciążenie płynnie (ograniczona szybkość zmian)
+        const rate = (phase === 2 ? 2.5 : 1.2) * dt;
+        n += Math.max(-rate, Math.min(rate, nT - n));
+
+        const Tm = Math.max(0, Math.min(0.3 * G, Dm + ftT)); // ciąg / masa
+        const ft = Tm - Dm;                                  // (T - D) / masa
+
+        if (i % every === 0) {
+            S.push({
+                t, x, h, V, gam, n, ft, phase,
+                L: n * MG, W: MG, T: Tm * MASS / 1000, D: Dm * MASS / 1000,
+                px: P.x, py: P.y, prot: P.rot, pN: P.onFloor ? Math.max(0, n) : 0,
+                bx: B.x, by: B.y, brot: B.rot,
+            });
+        }
+
+        // ruch samolotu po torze
+        V += (ft - G * Math.sin(gam)) * dt;
+        gam += (n * G - G * Math.cos(gam)) / V * dt;
+        x += V * Math.cos(gam) * dt;
+        h += V * Math.sin(gam) * dt;
+        t += dt;
+
+        // przedmioty w kabinie: przyspieszenie względne = -(siła aerodynamiczna / masa)
+        const ax = -ft, ay = -n * G;
+        for (const o of objs) {
+            o.onFloor = o.y - o.r <= 1e-4 && ay <= 0;
+            o.vx += (o.onFloor ? o.roll : 1) * ax * dt;  // toczenie: część siły idzie w obrót
+            o.vy += ay * dt;
+            if (o.onFloor) {
+                // tarcie o podłogę
+                const fr = o.mu * (-ay) * dt;
+                o.vx = Math.abs(o.vx) <= fr ? 0 : o.vx - Math.sign(o.vx) * fr;
+            }
+            o.x += o.vx * dt;
+            o.y += o.vy * dt;
+            if (o.y - o.r < 0)          { o.y = o.r;          o.vy = Math.abs(o.vy) < 0.15 ? 0 : -o.vy * o.e; }
+            if (o.y + o.r > CABIN.h)    { o.y = CABIN.h - o.r; o.vy = -Math.abs(o.vy) * o.e; }
+            if (o.x - o.r < 0)          { o.x = o.r;          o.vx = Math.abs(o.vx) * o.e; }
+            if (o.x + o.r > CABIN.w)    { o.x = CABIN.w - o.r; o.vx = -Math.abs(o.vx) * o.e; }
+        }
+        // obrót pasażera: unosząc się powoli koziołkuje, na podłodze wraca do pionu
+        if (P.onFloor && n > 0.3) {
+            P.rot = Math.atan2(Math.sin(P.rot), Math.cos(P.rot)) * (1 - 6 * dt);
+            P.w = 0;
+        } else if (P.y > P.r + 0.05) {
+            if (P.w === 0) P.w = 0.35;
+            P.rot += P.w * dt;
+        }
+        B.rot -= B.vx / B.r * dt;
+    }
+    phaseStart.push(t);
+    return { S, phaseStart, T: t };
+}
+
+const SIM = simulate();
+const S = SIM.S;
+const T_END = S[S.length - 1].t;
+
+const xs = S.map(s => s.x), hs = S.map(s => s.h);
+const X_MIN = Math.min(...xs), X_MAX = Math.max(...xs);
+const H_MIN = Math.min(...hs), H_MAX = Math.max(...hs);
+const ZERO_G_DUR = SIM.phaseStart[3] - SIM.phaseStart[2];
+
+function sampleAt(t) {
+    const f = Math.max(0, Math.min(S.length - 1, (t / T_END) * (S.length - 1)));
+    const i = Math.floor(f), j = Math.min(S.length - 1, i + 1), a = f - i;
+    const A = S[i], B = S[j], out = {};
+    for (const k in A) out[k] = typeof A[k] === 'number' && k !== 'phase' ? A[k] + (B[k] - A[k]) * a : A[k];
+    return out;
+}
+
+// ---------------------------------------------------------------------------
+// Pomocnicze funkcje rysowania
+// ---------------------------------------------------------------------------
+function setupCanvas(c) {
+    const dpr = window.devicePixelRatio || 1;
+    const w = c.clientWidth, h = c.clientHeight;
+    // przypisanie rozmiaru za każdym razem resetuje stan kontekstu (lineCap, cienie, czcionki),
+    // dzięki czemu każda klatka rysuje się identycznie, niezależnie od poprzedniej
+    c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
+    const ctx = c.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx, w, h };
+}
+
+function arrow(ctx, x0, y0, dx, dy, color, width = 3, label = null, dashed = false, labelSide = false) {
+    const len = Math.hypot(dx, dy);
+    if (len < 1) return;
+    const ux = dx / len, uy = dy / len;
+    const head = Math.min(12, len * 0.45);
+    ctx.save();
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width; ctx.lineCap = 'round';
+    if (dashed) ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 + dx - ux * head * 0.8, y0 + dy - uy * head * 0.8); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(x0 + dx, y0 + dy);
+    ctx.lineTo(x0 + dx - ux * head - uy * head * 0.5, y0 + dy - uy * head + ux * head * 0.5);
+    ctx.lineTo(x0 + dx - ux * head + uy * head * 0.5, y0 + dy - uy * head - ux * head * 0.5);
+    ctx.closePath(); ctx.fill();
+    if (label) {
+        ctx.font = '600 12px system-ui, sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        // etykieta za grotem lub z boku (gdy strzałka pokrywa się z inną)
+        const lx = labelSide ? x0 + dx * 0.7 - uy * 14 : x0 + dx + ux * 13;
+        const ly = labelSide ? y0 + dy * 0.7 + ux * 14 : y0 + dy + uy * 13;
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(13,17,23,.85)';
+        ctx.strokeText(label, lx, ly);
+        ctx.fillText(label, lx, ly);
+    }
+    ctx.restore();
+}
+
+// samolot w widoku z boku (sylwetka A310), nos w kierunku +x, długość kadłuba = 2*s,
+// środek układu ~ środek ciężkości
+function drawPlane(ctx, s) {
+    const P = (pts) => { ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x * s, y * s) : ctx.moveTo(x * s, y * s)); ctx.closePath(); };
+    ctx.save();
+
+    // statecznik poziomy (dalszy, widoczny za ogonem)
+    ctx.fillStyle = '#8492a6';
+    P([[-0.74, -0.02], [-0.97, -0.065], [-1.03, -0.06], [-0.93, -0.005]]); ctx.fill();
+
+    // statecznik pionowy: grzbietowa owiewka, skos ~40°, wysoki jak w A310
+    const fin = ctx.createLinearGradient(0, -0.48 * s, 0, -0.1 * s);
+    fin.addColorStop(0, '#d7dfe9'); fin.addColorStop(1, '#f5f8fb');
+    ctx.fillStyle = fin;
+    ctx.beginPath();
+    ctx.moveTo(-0.48 * s, -0.12 * s);
+    ctx.quadraticCurveTo(-0.58 * s, -0.125 * s, -0.62 * s, -0.17 * s);
+    ctx.lineTo(-0.87 * s, -0.48 * s);
+    ctx.lineTo(-1.01 * s, -0.48 * s);
+    ctx.lineTo(-0.985 * s, -0.09 * s);
+    ctx.closePath(); ctx.fill();
+    // ster kierunku
+    ctx.fillStyle = 'rgba(100,116,139,0.3)';
+    P([[-0.935, -0.48], [-1.01, -0.48], [-0.985, -0.1], [-0.92, -0.11]]); ctx.fill();
+    // akcent na szczycie
+    ctx.fillStyle = '#3b82f6';
+    P([[-0.87, -0.48], [-1.01, -0.48], [-1.006, -0.42], [-0.822, -0.42]]); ctx.fill();
+
+    // kadłub: tępy nos Airbusa, stała średnica, ogon podcięty od spodu
+    const body = ctx.createLinearGradient(0, -0.12 * s, 0, 0.12 * s);
+    body.addColorStop(0, '#ffffff'); body.addColorStop(0.6, '#e8edf3'); body.addColorStop(1, '#aebbcb');
+    ctx.fillStyle = body;
+    ctx.beginPath();
+    ctx.moveTo(1.0 * s, 0.025 * s);
+    ctx.bezierCurveTo(1.0 * s, -0.06 * s, 0.93 * s, -0.115 * s, 0.80 * s, -0.12 * s);
+    ctx.lineTo(-0.55 * s, -0.12 * s);
+    ctx.quadraticCurveTo(-0.85 * s, -0.115 * s, -1.0 * s, -0.09 * s);
+    ctx.lineTo(-1.0 * s, -0.06 * s);
+    ctx.bezierCurveTo(-0.8 * s, -0.01 * s, -0.62 * s, 0.12 * s, -0.42 * s, 0.12 * s);
+    ctx.lineTo(0.84 * s, 0.12 * s);
+    ctx.bezierCurveTo(0.93 * s, 0.12 * s, 0.99 * s, 0.09 * s, 1.0 * s, 0.025 * s);
+    ctx.fill();
+
+    // owiewka skrzydło-kadłub
+    ctx.fillStyle = '#b4c0ce';
+    ctx.beginPath(); ctx.ellipse(-0.06 * s, 0.112 * s, 0.27 * s, 0.035 * s, 0, 0, Math.PI); ctx.fill();
+
+    // pas ozdobny wzdłuż kadłuba
+    ctx.fillStyle = '#3b82f6';
+    P([[0.9, 0.022], [-0.6, 0.022], [-0.6, 0.042], [0.88, 0.042]]); ctx.fill();
+
+    // szyby kokpitu
+    ctx.fillStyle = '#1e3a5f';
+    P([[0.875, -0.09], [0.93, -0.074], [0.952, -0.052], [0.882, -0.056]]); ctx.fill();
+
+    if (s > 30) {
+        // okna kabiny i drzwi
+        ctx.fillStyle = '#334a66';
+        for (let x = 0.7; x > -0.56; x -= 0.055) {
+            if (Math.abs(x - 0.62) < 0.03 || Math.abs(x + 0.47) < 0.03) continue;
+            ctx.beginPath(); ctx.ellipse(x * s, -0.045 * s, 0.011 * s, 0.015 * s, 0, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.strokeStyle = 'rgba(71,85,105,0.55)'; ctx.lineWidth = Math.max(1, s * 0.005);
+        for (const x of [0.62, -0.47]) {
+            ctx.beginPath(); ctx.roundRect((x - 0.022) * s, -0.085 * s, 0.044 * s, 0.13 * s, 0.01 * s); ctx.stroke();
+        }
+    }
+
+    // skrzydło (bliższe), lekko wznoszące się ku końcówce
+    const wing = ctx.createLinearGradient(0, 0, 0, 0.1 * s);
+    wing.addColorStop(0, '#a7b4c4'); wing.addColorStop(1, '#7d8ba0');
+    ctx.fillStyle = wing;
+    P([[0.16, 0.085], [-0.30, -0.005], [-0.41, -0.005], [-0.22, 0.1]]); ctx.fill();
+
+    // pylon i silnik (CF6 / PW4000) wysunięty przed skrzydło
+    ctx.fillStyle = '#9aa7b8';
+    P([[0.26, 0.1], [0.08, 0.095], [0.06, 0.14], [0.25, 0.145]]); ctx.fill();
+    const nac = ctx.createLinearGradient(0, 0.135 * s, 0, 0.245 * s);
+    nac.addColorStop(0, '#e2e8f0'); nac.addColorStop(1, '#8794a8');
+    ctx.fillStyle = nac;
+    P([[0.33, 0.135], [0.15, 0.14], [0.09, 0.172], [0.09, 0.208], [0.15, 0.24], [0.33, 0.245]]); ctx.fill();
+    ctx.fillStyle = '#475569';
+    P([[0.09, 0.176], [0.04, 0.19], [0.09, 0.204]]); ctx.fill();   // stożek wylotowy
+    ctx.fillStyle = '#64748b';
+    ctx.beginPath(); ctx.ellipse(0.33 * s, 0.19 * s, 0.014 * s, 0.055 * s, 0, 0, Math.PI * 2); ctx.fill(); // wlot
+
+    ctx.restore();
+}
+
+function hexA(hex, a) {
+    const v = parseInt(hex.slice(1), 16);
+    return `rgba(${v >> 16},${(v >> 8) & 255},${v & 255},${a})`;
+}
+
+// ---------------------------------------------------------------------------
+// Widok trajektorii
+// ---------------------------------------------------------------------------
+const mainCanvas = document.getElementById('mainCanvas');
+const CLOUDS = Array.from({ length: 9 }, (_, i) => ({
+    fx: (i * 0.137 + 0.05) % 1, fy: 0.15 + ((i * 0.31) % 0.75), s: 0.6 + ((i * 0.53) % 0.8),
+}));
+
+function mainTransform(w, h) {
+    const padL = 46, padR = 22, padT = 34, padB = 34;
+    const sx = (w - padL - padR) / (X_MAX - X_MIN);
+    const hLo = H_MIN - 250, hHi = H_MAX + 350;
+    const sy = (h - padT - padB) / (hHi - hLo);
+    return {
+        sx, sy, exag: sy / sx, hLo, hHi, padL, padT, padB,
+        X: x => padL + (x - X_MIN) * sx,
+        Y: y => h - padB - (y - hLo) * sy,
+    };
+}
+
+function drawMain(cur) {
+    const { ctx, w, h } = setupCanvas(mainCanvas);
+    const tf = mainTransform(w, h);
+
+    // niebo
+    const sky = ctx.createLinearGradient(0, 0, 0, h);
+    sky.addColorStop(0, '#0b2a4a'); sky.addColorStop(0.6, '#1c5a8c'); sky.addColorStop(1, '#5d9cc9');
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h);
+
+    // chmury
+    for (const c of CLOUDS) {
+        const cx = c.fx * w, cy = c.fy * h, r = 26 * c.s;
+        ctx.fillStyle = 'rgba(255,255,255,0.07)';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, r * 2.2, r * 0.55, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx - r * 0.7, cy - r * 0.25, r * 1.1, r * 0.5, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx + r * 0.8, cy - r * 0.2, r * 1.2, r * 0.45, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // siatka wysokości
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let a = Math.ceil(tf.hLo / 500) * 500; a <= tf.hHi; a += 500) {
+        const y = tf.Y(a);
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(tf.padL, y); ctx.lineTo(w - 10, y); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.55)';
+        ctx.fillText(fmt(a / 1000, 1) + ' km', tf.padL - 6, y);
+    }
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.fillText(t('distanceScale', { d: fmt((X_MAX - X_MIN) / 1000, 1), e: fmt(tf.exag, 1) }), tf.padL, h - 12);
+
+    // pełna trajektoria (podgląd)
+    ctx.setLineDash([4, 6]); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.beginPath();
+    S.forEach((s, i) => i ? ctx.lineTo(tf.X(s.x), tf.Y(s.h)) : ctx.moveTo(tf.X(s.x), tf.Y(s.h)));
+    ctx.stroke(); ctx.setLineDash([]);
+
+    // przebyta trajektoria w kolorach faz
+    const iCur = Math.round((cur.t / T_END) * (S.length - 1));
+    ctx.lineWidth = 4; ctx.lineCap = 'round';
+    let i = 0;
+    while (i < iCur) {
+        const ph = S[i].phase;
+        ctx.strokeStyle = PHASES[ph].color;
+        ctx.shadowColor = PHASES[ph].color; ctx.shadowBlur = 8;
+        ctx.beginPath(); ctx.moveTo(tf.X(S[i].x), tf.Y(S[i].h));
+        while (i < iCur && S[i].phase === ph) { i++; ctx.lineTo(tf.X(S[i].x), tf.Y(S[i].h)); }
+        ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+
+    // etykiety faz nad torem
+    ctx.font = '600 11px system-ui, sans-serif'; ctx.textAlign = 'center';
+    const pullG = fmt(N_PULL, 1) + ' G';
+    const labels = [['1 G', 0], [pullG, 1], [`0 G · ${fmt(ZERO_G_DUR)} s`, 2], [pullG, 3], ['1 G', 4]];
+    for (const [txt, ph] of labels) {
+        const tm = (SIM.phaseStart[ph] + SIM.phaseStart[ph + 1]) / 2;
+        const s = sampleAt(tm);
+        const active = cur.phase === ph;
+        ctx.fillStyle = active ? PHASES[ph].color : 'rgba(255,255,255,0.5)';
+        ctx.fillText(txt, tf.X(s.x), tf.Y(s.h) - (ph === 2 ? 20 : 16));
+    }
+
+    // granice strefy 0 G
+    for (const k of [2, 3]) {
+        const s = sampleAt(SIM.phaseStart[k]);
+        ctx.fillStyle = PHASES[2].color;
+        ctx.beginPath(); ctx.arc(tf.X(s.x), tf.Y(s.h), 4, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // samolot
+    const px = tf.X(cur.x), py = tf.Y(cur.h);
+    const ang = Math.atan2(Math.sin(cur.gam) * tf.sy, Math.cos(cur.gam) * tf.sx); // kąt w skali ekranu
+    // wektory sił (schematycznie): siła nośna ⟂ do toru, ciężar w dół
+    const k = 38 / MG;
+    arrow(ctx, px, py, -Math.sin(ang) * cur.L * k, -Math.cos(ang) * cur.L * k, '#4ade80', 3, cur.L > MG * 0.15 ? 'L' : null);
+    arrow(ctx, px, py, 0, cur.W * k, '#f87171', 3, 'mg');
+    ctx.save();
+    ctx.translate(px, py); ctx.rotate(-ang);
+    ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 3;
+    drawPlane(ctx, 22);
+    ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// Diagram sił (free body diagram)
+// ---------------------------------------------------------------------------
+const fbdCanvas = document.getElementById('fbdCanvas');
+const TD_SCALE = 3;
+
+function drawFBD(cur) {
+    const { ctx, w, h } = setupCanvas(fbdCanvas);
+    ctx.fillStyle = '#10161e'; ctx.fillRect(0, 0, w, h);
+    const cx = w * 0.5, cy = h * 0.5;
+    const k = Math.min(w * 0.6, h) * 0.26 / MG;   // px na kN
+
+    // poziom odniesienia
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.setLineDash([3, 5]);
+    ctx.beginPath(); ctx.moveTo(10, cy); ctx.lineTo(w - 10, cy); ctx.stroke(); ctx.setLineDash([]);
+
+    const g = cur.gam;
+    const tx = Math.cos(g), ty = -Math.sin(g);   // kierunek toru (ekran, y w dół)
+    const nx = -Math.sin(g), ny = -Math.cos(g);  // normalna do toru (w górę samolotu)
+
+    // kąt toru
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(cx, cy, 34, 0, -g, g > 0); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText(`γ = ${(g * 180 / Math.PI).toFixed(0)}°`, cx + 40, cy + (g > 0 ? -6 : 14));
+
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(-g);
+    ctx.globalAlpha = 0.95;
+    drawPlane(ctx, Math.min(w, h) * 0.3);
+    ctx.restore();
+
+    // siły aerodynamiczne + ciąg; model punktu materialnego, więc wszystkie zaczepione w środku masy
+    const L = cur.L * k, W = cur.W * k, T = cur.T * k * TD_SCALE, D = cur.D * k * TD_SCALE;
+    arrow(ctx, cx, cy, nx * L, ny * L, '#4ade80', 3.5, cur.L > MG * 0.1 ? 'L' : null);
+    arrow(ctx, cx, cy, tx * T, ty * T, '#facc15', 3, T > 8 ? 'T' : null);
+    arrow(ctx, cx, cy, -tx * D, -ty * D, '#2dd4bf', 3, D > 8 ? 'D' : null);
+    arrow(ctx, cx, cy, 0, W, '#f87171', 3.5, 'mg');
+
+    // wypadkowa
+    const aT = cur.T - cur.D;
+    const Fx = cur.L * nx + aT * tx, Fy = cur.L * ny + aT * ty + cur.W;
+    if (Math.hypot(Fx, Fy) * k > 6) arrow(ctx, cx, cy, Fx * k, Fy * k, '#f0abfc', 2.5, 'F', true, true);
+
+    // kolory sił objaśnia lista słupków pod diagramem
+    ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#8b98a8';
+    ctx.fillText(t('tdScale', { k: TD_SCALE }), w - 10, h - 12);
+    ctx.textBaseline = 'alphabetic';
+}
+
+const barsEl = document.getElementById('bars');
+const BAR_DEFS = [
+    ['L', 'barL', '#4ade80'],
+    ['W', 'barW', '#f87171'],
+    ['T', 'barT', '#facc15'],
+    ['D', 'barD', '#2dd4bf'],
+    ['F', 'barF', '#f0abfc'],
+];
+function buildBars() {
+    barsEl.innerHTML = BAR_DEFS.map(([k, l, c]) =>
+        `<div class="lbl"><b style="background:${c}"></b>${t(l)}</div><div class="track"><div class="fill" id="bar${k}" style="background:${c}"></div></div><div class="val" id="val${k}"></div>`
+    ).join('');
+}
+
+function updateBars(cur) {
+    const aT = cur.T - cur.D;
+    const F = Math.hypot(aT * Math.cos(cur.gam) - cur.L * Math.sin(cur.gam),
+                         aT * Math.sin(cur.gam) + cur.L * Math.cos(cur.gam) - cur.W);
+    const vals = { L: cur.L, W: cur.W, T: cur.T, D: cur.D, F };
+    const max = MG * 1.9;
+    for (const [k] of BAR_DEFS) {
+        document.getElementById('bar' + k).style.width = Math.max(0, Math.min(100, vals[k] / max * 100)) + '%';
+        document.getElementById('val' + k).textContent = fmt(Math.max(0, vals[k])) + ' kN';
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Widok kabiny
+// ---------------------------------------------------------------------------
+const cabinCanvas = document.getElementById('cabinCanvas');
+
+function drawPerson(ctx, s, floating) {
+    // s = px na metr, środek układu = środek ciała, wysokość 1.74 m
+    ctx.strokeStyle = '#f1f5f9'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.lineWidth = Math.max(2, 0.09 * s);
+    const arm = floating ? -0.25 : 0.32;  // ręce w górę, gdy unosi się
+    ctx.beginPath();
+    ctx.moveTo(0, -0.05 * s); ctx.lineTo(0, -0.5 * s);                                   // tułów
+    ctx.moveTo(0, -0.05 * s); ctx.lineTo(-0.16 * s, 0.4 * s); ctx.lineTo(-0.18 * s, 0.87 * s);  // noga
+    ctx.moveTo(0, -0.05 * s); ctx.lineTo(0.16 * s, 0.4 * s); ctx.lineTo(0.2 * s, 0.87 * s);     // noga
+    ctx.moveTo(0, -0.42 * s); ctx.lineTo(-0.3 * s, arm * s * 0.4 - 0.2 * s);               // ręka
+    ctx.moveTo(0, -0.42 * s); ctx.lineTo(0.3 * s, arm * s * 0.4 - 0.2 * s);                // ręka
+    ctx.stroke();
+    ctx.fillStyle = '#f1f5f9';
+    ctx.beginPath(); ctx.arc(0, -0.68 * s, 0.13 * s, 0, Math.PI * 2); ctx.fill();
+}
+
+function drawCabin(cur) {
+    const { ctx, w, h } = setupCanvas(cabinCanvas);
+    ctx.fillStyle = '#10161e'; ctx.fillRect(0, 0, w, h);
+    const pad = 14, footer = 26;
+    const s = Math.max(1, Math.min((w - 2 * pad) / CABIN.w, (h - 2 * pad - footer) / CABIN.h));
+    const ox = (w - CABIN.w * s) / 2, oy = pad + CABIN.h * s;  // lewy dolny róg (podłoga)
+    const X = x => ox + x * s, Y = y => oy - y * s;
+
+    // ściany kabiny (wyściółka)
+    ctx.fillStyle = '#1f2937';
+    ctx.beginPath(); ctx.roundRect(X(0), Y(CABIN.h), CABIN.w * s, CABIN.h * s, 10); ctx.fill();
+    ctx.fillStyle = 'rgba(59,130,246,0.12)';
+    for (let k = 0; k < 6; k++) {
+        ctx.beginPath(); ctx.roundRect(X(0.35 + k), Y(1.75), 0.32 * s, 0.42 * s, 6); ctx.fill();
+    }
+    ctx.fillStyle = '#374151'; ctx.fillRect(X(0), Y(0.0), CABIN.w * s, 4);   // podłoga
+    ctx.fillStyle = '#9ca3af'; ctx.font = '10px system-ui, sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText(t('cabinFront'), X(CABIN.w) - 6, Y(CABIN.h) + 13);
+
+    // przeciążenie odczuwane i nacisk podłogi
+    const nCol = cur.n > 1.3 ? '#fb923c' : cur.n < 0.2 ? '#c084fc' : '#38bdf8';
+    ctx.textAlign = 'left'; ctx.font = '600 13px system-ui, sans-serif'; ctx.fillStyle = nCol;
+    ctx.fillText(`${fmt(cur.n, 2)} G`, X(0), oy + 20);
+    ctx.font = '12px system-ui, sans-serif'; ctx.fillStyle = '#aab6c4';
+    ctx.fillText(cur.pN > 0.02 ? t('floorForce', { n: fmt(cur.pN, 2) }) : t('floating'),
+                 X(0) + 58, oy + 20);
+
+    // piłka
+    ctx.save(); ctx.translate(X(cur.bx), Y(cur.by)); ctx.rotate(cur.brot);
+    ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(0, 0, 0.14 * s, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(0, 0, 0.14 * s, -0.6, 0.6); ctx.stroke();
+    ctx.restore();
+
+    // pasażer
+    const floating = cur.pN < 0.05;
+    ctx.save(); ctx.translate(X(cur.px), Y(cur.py)); ctx.rotate(cur.prot);
+    drawPerson(ctx, s, floating);
+    ctx.restore();
+
+    // siły na pasażerze (1 mg ~ 0.55 m)
+    const k = 0.55 * s;
+    const px = X(cur.px) - 0.55 * s, py = Y(cur.py);
+    // grawitacja w układzie kabiny jest obrócona o kąt toru
+    arrow(ctx, px, py, -Math.sin(cur.gam) * k, Math.cos(cur.gam) * k, '#f87171', 2.5, 'mg');
+    if (cur.pN > 0.02) arrow(ctx, X(cur.px), Y(0), 0, -cur.pN * k, '#4ade80', 2.5, 'N');
+}
+
+// ---------------------------------------------------------------------------
+// Wykres przeciążenia / wysokości
+// ---------------------------------------------------------------------------
+const chartCanvas = document.getElementById('chartCanvas');
+let chartGeom = null;
+
+function drawChart(cur) {
+    const { ctx, w, h } = setupCanvas(chartCanvas);
+    ctx.fillStyle = '#161b22'; ctx.fillRect(0, 0, w, h);
+    const padL = 42, padR = 50, padT = 12, padB = 24;
+    const X = t => padL + t / T_END * (w - padL - padR);
+    const nLo = -0.2, nHi = 2.1;
+    const Yn = n => padT + (nHi - n) / (nHi - nLo) * (h - padT - padB);
+    const hLo = H_MIN - 200, hHi = H_MAX + 200;
+    const Yh = a => padT + (hHi - a) / (hHi - hLo) * (h - padT - padB);
+    chartGeom = { padL, padR, w };
+
+    // pasma faz
+    for (let p = 0; p < PHASES.length; p++) {
+        const a = X(SIM.phaseStart[p]), b = X(SIM.phaseStart[p + 1]);
+        ctx.fillStyle = hexA(PHASES[p].color, p === cur.phase ? 0.16 : 0.07);
+        ctx.fillRect(a, padT, b - a, h - padT - padB);
+    }
+    // siatka
+    ctx.font = '11px system-ui, sans-serif'; ctx.textBaseline = 'middle';
+    for (const n of [0, 1, 1.8]) {
+        ctx.strokeStyle = n === 0 ? 'rgba(192,132,252,0.4)' : 'rgba(255,255,255,0.1)';
+        ctx.beginPath(); ctx.moveTo(padL, Yn(n)); ctx.lineTo(w - padR, Yn(n)); ctx.stroke();
+        ctx.fillStyle = '#8b98a8'; ctx.textAlign = 'right'; ctx.fillText(fmt(n, n % 1 ? 1 : 0) + ' G', padL - 6, Yn(n));
+    }
+    ctx.textAlign = 'left';
+    for (let a = Math.ceil(hLo / 1000) * 1000; a <= hHi; a += 1000) {
+        ctx.fillStyle = 'rgba(56,189,248,0.7)'; ctx.fillText((a / 1000) + ' km', w - padR + 6, Yh(a));
+    }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = '#8b98a8';
+    for (let t = 0; t <= T_END; t += 10) ctx.fillText(t + ' s', X(t), h - 7);
+
+    // wysokość
+    ctx.strokeStyle = 'rgba(56,189,248,0.55)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); S.forEach((s, i) => i ? ctx.lineTo(X(s.t), Yh(s.h)) : ctx.moveTo(X(s.t), Yh(s.h))); ctx.stroke();
+    ctx.setLineDash([]);
+    // przeciążenie
+    ctx.strokeStyle = '#e6edf3'; ctx.lineWidth = 2;
+    ctx.beginPath(); S.forEach((s, i) => i ? ctx.lineTo(X(s.t), Yn(s.n)) : ctx.moveTo(X(s.t), Yn(s.n))); ctx.stroke();
+
+    // kursor czasu
+    const cxp = X(cur.t);
+    ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(cxp, padT); ctx.lineTo(cxp, h - padB); ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(cxp, Yn(cur.n), 4.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath(); ctx.arc(cxp, Yh(cur.h), 3.5, 0, Math.PI * 2); ctx.fill();
+
+    // legenda
+    ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'left';
+    const legN = t('chartN'), legX2 = padL + 26 + ctx.measureText(legN).width + 18;
+    ctx.fillStyle = '#e6edf3'; ctx.fillRect(padL + 8, padT + 6, 14, 2); ctx.fillText(legN, padL + 26, padT + 10);
+    ctx.fillStyle = 'rgba(56,189,248,0.8)'; ctx.fillRect(legX2, padT + 6, 14, 2); ctx.fillText(t('chartH'), legX2 + 18, padT + 10);
+}
+
+// ---------------------------------------------------------------------------
+// Statystyki
+// ---------------------------------------------------------------------------
+const explainEl = document.getElementById('explain');
+let explainEls = [];
+function buildExplain() {
+    explainEl.innerHTML = t('explain').map(s => `<p>${s}</p>`).join('');
+    explainEls = [...explainEl.children];
+}
+
+const statsEl = document.getElementById('stats');
+const STAT_DEFS = [
+    ['t', 'statT'], ['h', 'statH'], ['v', 'statV'], ['g', 'statG'], ['n', 'statN'], ['vz', 'statVz'],
+];
+function buildStats() {
+    statsEl.innerHTML = STAT_DEFS.map(([k, l]) => `<div class="stat"><div class="k">${t(l)}</div><div class="v" id="st_${k}"></div></div>`).join('');
+}
+
+function updateStats(cur) {
+    const set = (k, v, u) => document.getElementById('st_' + k).innerHTML = `${v}<small>${u}</small>`;
+    set('t', fmt(cur.t, 1), 's');
+    set('h', fmt(cur.h), 'm');
+    set('v', fmt(cur.V * 3.6), 'km/h');
+    set('g', fmt(cur.gam * 180 / Math.PI, 1), '°');
+    set('n', fmt(cur.n, 2), 'G');
+    set('vz', fmt(cur.V * Math.sin(cur.gam)), 'm/s');
+    const ph = PHASES[cur.phase];
+    document.getElementById('phaseName').textContent = t('phases')[cur.phase];
+    document.getElementById('phaseDot').style.background = ph.color;
+    document.getElementById('phaseDot').style.boxShadow = `0 0 10px ${ph.color}`;
+    explainEls.forEach((el, i) => el.classList.toggle('on', i === cur.phase));
+}
+
+// ---------------------------------------------------------------------------
+// Sterowanie czasem
+// ---------------------------------------------------------------------------
+const slider = document.getElementById('timeSlider');
+const playBtn = document.getElementById('playBtn');
+const speedSel = document.getElementById('speedSel');
+const timeLabel = document.getElementById('timeLabel');
+slider.max = T_END.toFixed(2);
+
+let simTime = 0, playing = false, lastTs = null;
+
+function render() {
+    const cur = sampleAt(simTime);
+    drawMain(cur);
+    drawFBD(cur);
+    drawCabin(cur);
+    drawChart(cur);
+    updateBars(cur);
+    updateStats(cur);
+    slider.value = simTime;
+    timeLabel.innerHTML = `<b>${fmt(simTime, 1)} s</b> / ${fmt(T_END, 1)} s`;
+}
+
+function setPlaying(p) {
+    playing = p;
+    playBtn.textContent = t(p ? 'pause' : simTime >= T_END ? 'restart' : simTime > 0 ? 'resume' : 'play');
+    lastTs = null;
+    if (p) requestAnimationFrame(tick);
+}
+
+function tick(ts) {
+    if (!playing) return;
+    if (lastTs !== null) {
+        simTime += Math.min(0.1, (ts - lastTs) / 1000) * parseFloat(speedSel.value);
+        if (simTime >= T_END) { simTime = T_END; render(); setPlaying(false); return; }
+    }
+    lastTs = ts;
+    render();
+    requestAnimationFrame(tick);
+}
+
+function seek(t) { simTime = Math.max(0, Math.min(T_END, t)); render(); if (!playing) setPlaying(false); }
+
+playBtn.onclick = () => {
+    if (!playing && simTime >= T_END) simTime = 0;
+    setPlaying(!playing);
+};
+document.getElementById('resetBtn').onclick = () => { setPlaying(false); seek(0); };
+slider.oninput = () => seek(parseFloat(slider.value));
+
+// przewijanie przez przeciąganie po wykresie
+let dragging = false;
+function chartSeek(e) {
+    if (!chartGeom) return;
+    const r = chartCanvas.getBoundingClientRect();
+    const f = (e.clientX - r.left - chartGeom.padL) / (chartGeom.w - chartGeom.padL - chartGeom.padR);
+    seek(f * T_END);
+}
+chartCanvas.addEventListener('pointerdown', e => { dragging = true; chartCanvas.setPointerCapture(e.pointerId); chartSeek(e); });
+chartCanvas.addEventListener('pointermove', e => { if (dragging) chartSeek(e); });
+chartCanvas.addEventListener('pointerup', () => dragging = false);
+
+// skróty do faz
+const jumpsEl = document.getElementById('jumps');
+const jumpBtns = [1, 2, 3].map(p => {
+    const b = document.createElement('button');
+    b.style.borderColor = hexA(PHASES[p].color, 0.6);
+    b.onclick = () => seek(SIM.phaseStart[p] + 0.01);
+    jumpsEl.appendChild(b);
+    return b;
+});
+
+// przełącznik języka (lista budowana z I18N, więc nowe języki pojawiają się automatycznie)
+const langSel = document.getElementById('langSel');
+langSel.innerHTML = Object.entries(I18N).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
+langSel.onchange = () => setLang(langSel.value);
+
+function setLang(l) {
+    lang = I18N[l] ? l : FALLBACK_LANG;
+    try { localStorage.setItem('lang', lang); } catch (e) {}
+    langSel.value = lang;
+    document.documentElement.lang = lang;
+    document.title = t('docTitle');
+    document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = t(el.dataset.i18n));
+    document.querySelectorAll('[data-i18n-title]').forEach(el => el.title = t(el.dataset.i18nTitle));
+    jumpBtns.forEach((b, i) => b.textContent = t('jumps')[i]);
+    buildBars(); buildStats(); buildExplain();
+    setPlaying(playing);
+    render();
+}
+
+document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'SELECT') return;
+    if (e.code === 'Space') { e.preventDefault(); playBtn.click(); }
+    if (e.code === 'ArrowRight') { e.preventDefault(); seek(simTime + (e.shiftKey ? 5 : 0.5)); }
+    if (e.code === 'ArrowLeft') { e.preventDefault(); seek(simTime - (e.shiftKey ? 5 : 0.5)); }
+});
+
+// przerysuj, gdy zmieni się rozmiar któregokolwiek płótna (także po ustaleniu się układu strony)
+const resizeObs = new ResizeObserver(() => render());
+[mainCanvas, fbdCanvas, cabinCanvas, chartCanvas].forEach(c => resizeObs.observe(c));
+setLang(lang);
+</script>
+</body>
+</html>
